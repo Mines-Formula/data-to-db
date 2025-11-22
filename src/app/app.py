@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import tempfile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generator
 
 from flask import Flask, jsonify, render_template, request, Response
 from pathlib import Path
 from src.known_to_influxdb import line_protocol, write_to_influxDB
 from src.unknown_to_known import decode
+from src.raw_to_unknown import deserializer
 
 if TYPE_CHECKING:
     from werkzeug.datastructures.file_storage import FileStorage
@@ -39,7 +40,6 @@ def upload_data():
     ):
         return jsonify({"error": "Invalid types uploaded."}), 400
 
-
     # Read all file contents upfront to avoid closed file errors
     files_data = [(file.filename, file.read()) for file in request.files.values()]
 
@@ -49,16 +49,18 @@ def upload_data():
             from io import BytesIO
             from werkzeug.datastructures import FileStorage
 
-            file_like = FileStorage(stream=BytesIO(content), name=filename, filename=filename)
+            file_like = FileStorage(
+                stream=BytesIO(content), name=filename, filename=filename
+            )
             yield from convert_file(file_like)
 
     return Response(generate(), mimetype="text/event-stream")
 
 
-def convert_file(file: FileStorage) -> None:
+def convert_file(file: FileStorage) -> Generator[str]:
     """
     Converts .data following this flow:
-        .data -> .csv -> .line
+        .data (raw) -> .data (unknown) -> .csv (known) -> .line (known)
 
     Saves the intermediate .csv to CSV_PARENT_PATH
 
@@ -66,35 +68,44 @@ def convert_file(file: FileStorage) -> None:
     assert file.name
 
     csv_filename = CSV_FILENAME.format(file.name)
-    data_filename = DATA_FILENAME.format(file.name)
+    raw_data_filename = DATA_FILENAME.format("raw_" + file.name)
+    unknown_data_filename = DATA_FILENAME.format("unknown_" + file.name)
     line_filename = LINE_FILENAME.format(file.name)
 
     with tempfile.TemporaryDirectory() as temporary_directory:
         parent_path = Path(temporary_directory)
-        data_path = parent_path / data_filename
+        raw_data_path = parent_path / raw_data_filename
+        unknown_data_path = parent_path / unknown_data_filename
         csv_path = CSV_PARENT_PATH / csv_filename
         line_path = CSV_PARENT_PATH / line_filename
 
-        #yield "Saving .data file to temp dir..."
-        file.save(data_path)  # Save .data file to temp dir
-        yield "Done! Saved .data file to temp dir"
+        yield "Saving raw .data file to temp dir..."
+        file.save(raw_data_path)  # Save .data file to temp dir
+        # yield "Done! Saved .data file to temp dir"
 
-        #yield "Decoding .data file to .csv and saving..."
+        # CONVERT TO UNKNOWN SAVE TO `unknown_data_path`
+        yield "Deserializing raw .data file to unknown .data file..."
+        deserializer.deserialize(
+            str(raw_data_path.resolve()), str(unknown_data_path.resolve())
+        )
+
+        yield "Decoding unknown .data file to .csv and saving..."
         decode.make_known(
-            data_path, csv_path
+            str(unknown_data_path.resolve()), str(csv_path.resolve())
         )  # Convert .data file to .csv and save to CSV_PARENT_PATH
-        yield "Done! Decoded .data file"
+        # yield "Done! Decoded .data file"
 
-        #yield "Converting .csv to .line file..."
+        yield "Converting .csv to .line file..."
         line_protocol.convert_to_lineprotocol(
             str(csv_path.resolve()),
             str(line_path.resolve()),
         )  # Convert .csv to .line and save to temp dir
-        yield "Done! Converted .csv file to .line file"
+        # yield "Done! Converted .csv file to .line file"
 
-        #yield "Writing .line file to influxDB..."
+        yield "Writing .line file to influxDB..."
         write_to_influxDB.write_to_influxDB(str(line_path.resolve()))
-        yield "Done! Wrote .line file to influxDB"
+        # yield "Done! Wrote .line file to influxDB"
+
 
 if __name__ == "__main__":
     app.run(debug=True)
