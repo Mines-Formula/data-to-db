@@ -16,7 +16,7 @@ def make_known(unknown_file_name: str, output_file_name: str):
     :param output_file_name: Name of the csv file decoded data will be written to
     """
     # === LOAD DBC ===
-    db = cantools.database.load_file("MF13Beta.dbc")
+    db = cantools.database.load_file("data/MF13Beta.dbc")
 
     # === DEFINE HEADERS AND FILE PATHS ===
     fields = ["Timestamp", "CANID", "Sensor", "Value", "Unit"]
@@ -30,7 +30,7 @@ def make_known(unknown_file_name: str, output_file_name: str):
         header = unknown.readline()
         header = unknown.readline()
         data = []
-        print(header)  # This is just to get the header out of the way
+        # print(header)  # This is just to get the header out of the way
 
         # === ADDS DATA TO LIST, FORMATTED [timestamp,canID,dataBytes]
         for line in unknown:
