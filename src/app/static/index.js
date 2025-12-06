@@ -2,17 +2,16 @@ const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const alertContainer = document.getElementById('alertContainer');
 
+let pollIntervalId = null;
+
 dropZone.addEventListener('click', () => fileInput.click());
 
+// For .data files, MIME type is often generic, so we won’t over-validate.
+// Just show the visual dragover state.
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
-  const isCSV = Array.from(e.dataTransfer.items)
-                    .some(
-                        (item) => item.type === 'text/csv' ||
-                            item.type === 'application/vnd.ms-excel');
-
-  dropZone.classList.remove('dragover', 'invalid');
-  dropZone.classList.add(isCSV ? 'dragover' : 'invalid');
+  dropZone.classList.remove('invalid');
+  dropZone.classList.add('dragover');
 });
 
 dropZone.addEventListener('dragleave', () => {
@@ -23,56 +22,107 @@ dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropZone.classList.remove('dragover', 'invalid');
 
+  if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) {
+    showAlert('No files dropped.', 'warning');
+    return;
+  }
+
   handleFiles(e.dataTransfer.files);
 });
 
 fileInput.addEventListener('change', (e) => {
+  if (!e.target.files || e.target.files.length === 0) {
+    return;
+  }
   handleFiles(e.target.files);
 });
 
 function handleFiles(files) {
   const formData = new FormData();
   for (const file of files) {
+    // Backend just loops over request.files.values() so key name doesn’t matter
     formData.append(file.name, file);
   }
 
   // Clear previous alerts
   alertContainer.innerHTML = '';
 
-  // Create a temporary endpoint for SSE upload
-  // We use fetch to POST the files, then listen for SSE progress
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/upload', true);
+  // Stop any previous polling loop
+  if (pollIntervalId !== null) {
+    clearInterval(pollIntervalId);
+    pollIntervalId = null;
+  }
 
-  xhr.onreadystatechange = function() {
-    if (xhr.readyState === XMLHttpRequest.DONE && xhr.status !== 200) {
-      showAlert('Upload failed or server error.', 'danger');
-    }
-  };
+  showAlert('Uploading file(s) and starting conversion…', 'info');
 
-  xhr.onload = function() {
-    console.log('Upload request finished.');
-  };
+  fetch('/upload', {
+    method: 'POST',
+    body: formData,
+  })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Upload failed or server error.');
+        }
+        return response.json();
+      })
+      .then((data) => {
+        const taskName = data.name;
+        if (!taskName) {
+          throw new Error('Server did not return a task name.');
+        }
 
-  // Listen for SSE events via a custom EventSource
-  xhr.upload.addEventListener('load', () => {
-    // After upload finishes, connect to SSE stream
-    const evtSource = new EventSource('/upload');  // Flask sends SSE here
-    evtSource.onmessage = function(event) {
-      appendStatus(event.data);
-    };
-    evtSource.onerror = function() {
-      evtSource.close();
-    };
-  });
-
-  xhr.send(formData);
+        // Start polling /progress with this task name
+        startPolling(taskName);
+      })
+      .catch((error) => {
+        console.error(error);
+        showAlert(error.message || 'Upload failed or server error.', 'danger');
+      });
 }
 
-function appendStatus(message) {
-  const div = document.createElement('div');
-  div.textContent = message;
-  alertContainer.children[0] = div;
+function startPolling(taskName) {
+  // Just in case
+  if (pollIntervalId !== null) {
+    clearInterval(pollIntervalId);
+  }
+
+  // Immediately show “0%” and then start interval
+  updateProgressDisplay(0);
+
+  pollIntervalId = setInterval(async () => {
+    try {
+      const response =
+          await fetch(`/progress?name=${encodeURIComponent(taskName)}`);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Task not found on server.');
+        }
+        throw new Error('Failed to get progress from server.');
+      }
+
+      const data = await response.json();
+      const progress = typeof data.progress === 'number' ? data.progress : 0;
+
+      updateProgressDisplay(progress);
+
+      if (progress >= 100) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+        showAlert('Upload and processing complete!', 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      clearInterval(pollIntervalId);
+      pollIntervalId = null;
+      showAlert('Error while checking progress.', 'danger');
+    }
+  }, 500);  // poll every second
+}
+
+function updateProgressDisplay(percent) {
+  const clamped = Math.min(Math.max(percent, 0), 100);
+  showAlert(`Processing: ${clamped}%`, 'info');
 }
 
 function showAlert(message, type) {

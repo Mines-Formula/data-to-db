@@ -33,4 +33,5 @@ COPY . .
 EXPOSE 6767
 
 # Default command to run the app with Gunicorn
+CMD
 CMD ["flask", "--app", "src.app.app:app", "run", "-p", "6767", "-h", "0.0.0.0"]
