@@ -1,5 +1,6 @@
 import cantools
-from pathlib import Path
+import pandas as pd
+import os
 
 """
 @author Magnus Van Zyl
@@ -7,7 +8,7 @@ Script to convert raw canbus data into readable data in a csv file in the format
 """
 
 
-def make_known(unknown_file_name: Path, output_file_name: Path):
+def make_known(unknown_file_name: str, output_file_name: str):
     """
     Takes input file of unknown data and decodes it writing into a csv. Uses MF13Beta.dbc file.
 
@@ -21,12 +22,15 @@ def make_known(unknown_file_name: Path, output_file_name: Path):
     fields = ["Timestamp", "CANID", "Sensor", "Value", "Unit"]
     data_file = unknown_file_name
     output_file = output_file_name
+    file_name_base, ending = os.path.splitext(data_file)
+    log_file = f"{file_name_base}.log"
 
     # === READS RAW DATA ===
     with open(data_file, "r") as unknown:
         header = unknown.readline()
+        header = unknown.readline()
         data = []
-        print(header)  # This is just to get the header out of the way
+        # print(header)  # This is just to get the header out of the way
 
         # === ADDS DATA TO LIST, FORMATTED [timestamp,canID,dataBytes]
         for line in unknown:
@@ -45,7 +49,7 @@ def make_known(unknown_file_name: Path, output_file_name: Path):
 
     failed_lines = 0
     skipped_ids = []  # List of CAN IDs that are found in data_file but not in the dbc
-
+    failed_lines_raw = []
     # === DECODES dataBytes TO BE WRITTEN INTO CSV ===
     writable_lines = []
     for dataset in data:
@@ -75,6 +79,7 @@ def make_known(unknown_file_name: Path, output_file_name: Path):
             writable_lines.append(write_this) 
 
         except Exception as e:
+            failed_lines_raw.append(dataset)
             if dataset[1] not in skipped_ids:
                 skipped_ids.append(dataset[1])
             failed_lines += 1
@@ -94,6 +99,15 @@ def make_known(unknown_file_name: Path, output_file_name: Path):
     if no_time:
         raise ValueError('Time sensor with no value')
 
+    # === WRITES FAILED LINES TO LOG FILE ===
+    for i in range(len(failed_lines_raw)):
+        for j in range(len(failed_lines_raw[i])):
+            failed_lines_raw[i][j] = str(failed_lines_raw[i][j])
+    with open(log_file, "w") as log:
+        log.write("Timestamp,CANID,DataBytes\n")
+        for failure in failed_lines_raw:
+            log.write(f'{",".join(failure)}\n')
+
     # === WRITES DECODED DATA TO OUTPUT FILE ===
     with open(output_file, "w") as file:
         file.write(f'{",".join(fields)}\n')
@@ -110,3 +124,8 @@ def make_known(unknown_file_name: Path, output_file_name: Path):
     print(f"DATA DECODED INTO FILE: {output_file}")
     print(f"LINES SKIPPED: {failed_lines}")
     print(f"SKIPPED IDS: {skipped_ids}")
+
+
+# unknown_file = 'EnduranceDayData (2).data'
+# output_file = 'decoded_can_data_2.csv'
+# make_known(unknown_file, output_file)
