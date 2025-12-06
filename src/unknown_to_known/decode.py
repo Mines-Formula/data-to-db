@@ -73,10 +73,10 @@ def make_known(unknown_file_name: str, output_file_name: str):
                         ""  # For sensors with undefined units in dbc, adds empty string
                     )
                 units.append(unit)
-            write_this.append(sensors) # write_this[2]
-            write_this.append(values) # write_this[3]
-            write_this.append(units) # write_this[4]
-            writable_lines.append(write_this) 
+            write_this.append(sensors)  # write_this[2]
+            write_this.append(values)  # write_this[3]
+            write_this.append(units)  # write_this[4]
+            writable_lines.append(write_this)
 
         except Exception as e:
             failed_lines_raw.append(dataset)
@@ -84,20 +84,15 @@ def make_known(unknown_file_name: str, output_file_name: str):
                 skipped_ids.append(dataset[1])
             failed_lines += 1
             continue
-    
-    # === CHECK FOR TIME SENSOR ===
-    if 'Time' not in sensors:
-        raise ValueError('Time sensor with no value')
-    # if sensors['Time']
-    
+
     # === CHECK FOR TIME VALUES ===
     no_time = True
     for line in writable_lines:
         for i in range(len(line[2])):
-            if line[2][i] == 'Time' and line[3][i] != None:
+            if line[2][i] == "Time" and line[3][i] != None:
                 no_time = False
     if no_time:
-        raise ValueError('Time sensor with no value')
+        raise ValueError("Time sensor with no value")
 
     # === WRITES FAILED LINES TO LOG FILE ===
     for i in range(len(failed_lines_raw)):

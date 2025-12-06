@@ -102,6 +102,13 @@ function startPolling(taskName) {
       }
 
       const data = await response.json();
+
+      if (data.exception.present) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+        return showAlert(`Error: ${data.exception.type}`, 'danger');
+      }
+
       const progress = typeof data.progress === 'number' ? data.progress : 0;
 
       updateProgressDisplay(progress);
@@ -127,6 +134,6 @@ function updateProgressDisplay(percent) {
 
 function showAlert(message, type) {
   alertContainer.innerHTML = `
-    <div class="alert alert-${type} mt-3" role="alert">${message}</div>
+    <div class='alert alert-${type} mt-3' role='alert'>${message}</div>
   `;
 }

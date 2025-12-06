@@ -9,6 +9,7 @@ from src.known_to_influxdb import line_protocol, write_to_influxDB
 from src.unknown_to_known import decode
 from src.raw_to_unknown import deserializer
 from os import urandom
+from .models import ConversionProgress, LimitedDict
 import threading
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ CSV_FILENAME = "{}.csv"
 LINE_FILENAME = "{}.line"
 
 app = Flask(__name__)
-app.config["tasks"] = {}
+app.config["tasks"] = LimitedDict(max_size=20)
 
 
 @app.route("/")
@@ -36,11 +37,24 @@ def get_progress():
     if thread_name is None:
         return jsonify({"message": "No name parameter provided!"}), 400
 
-    progress = app.config["tasks"].get(thread_name)
+    progress: ConversionProgress = app.config["tasks"].get(thread_name)
     if progress is None:
         return jsonify({"message": "Unknown task name."}), 404
 
-    return jsonify({"progress": progress})
+    exception_present = progress.exception is not None
+
+    return (
+        jsonify(
+            {
+                "progress": progress.progress,
+                "exception": {
+                    "present": exception_present,
+                    "type": str(progress.exception),
+                },
+            }
+        ),
+        200,
+    )
 
 
 def allowed_file(filename: str) -> bool:
@@ -67,7 +81,9 @@ def upload_data():
         name=urandom(8).hex(),
     )
 
-    app.config["tasks"][conversion_thread.name] = 0
+    app.config["tasks"][conversion_thread.name] = ConversionProgress(
+        name=conversion_thread.name
+    )
     conversion_thread.start()
 
     return jsonify({"name": conversion_thread.name})
@@ -86,7 +102,7 @@ def convert_files(files):
         convert_file(file_like)
 
 
-def convert_file(file: FileStorage) -> Generator[str]:
+def convert_file(file: FileStorage) -> None:
     """
     Converts .data following this flow:
         .data (raw) -> .data (unknown) -> .csv (known) -> .line (known)
@@ -102,6 +118,7 @@ def convert_file(file: FileStorage) -> Generator[str]:
     line_filename = LINE_FILENAME.format(file.name)
 
     current_thread_name = threading.current_thread().name
+    conversion_progress: ConversionProgress = app.config["tasks"][current_thread_name]
 
     with tempfile.TemporaryDirectory() as temporary_directory:
         parent_path = Path(temporary_directory)
@@ -110,40 +127,45 @@ def convert_file(file: FileStorage) -> Generator[str]:
         csv_path = CSV_PARENT_PATH / csv_filename
         line_path = CSV_PARENT_PATH / line_filename
 
-        # yield "Saving raw .data file to temp dir..."
-        file.save(raw_data_path)  # Save .data file to temp dir
-        app.config["tasks"][current_thread_name] = 20
-        # yield "Done! Saved .data file to temp dir"
+        file.save(raw_data_path)
+        conversion_progress.progress = 20
 
-        # CONVERT TO UNKNOWN SAVE TO `unknown_data_path`
-        # yield "Deserializing raw .data file to unknown .data file..."
-        deserializer.deserialize(
-            str(raw_data_path.resolve()), str(unknown_data_path.resolve())
-        )
-        app.config["tasks"][current_thread_name] = 40
+        try:
+            deserializer.deserialize(
+                str(raw_data_path.resolve()), str(unknown_data_path.resolve())
+            )
+        except Exception as exec:
+            conversion_progress.exception = exec
+            return
+        else:
+            conversion_progress.progress = 20
 
-        # yield "Decoding unknown .data file to .csv and saving..."
-        decode.make_known(
-            str(unknown_data_path.resolve()), str(csv_path.resolve())
-        )  # Convert .data file to .csv and save to CSV_PARENT_PATH
-        app.config["tasks"][current_thread_name] = 60
-        # yield "Done! Decoded .data file"
+        try:
+            decode.make_known(str(unknown_data_path.resolve()), str(csv_path.resolve()))
+        except ValueError as exec:
+            conversion_progress.exception = exec
+            return
+        else:
+            conversion_progress.progress = 60
 
-        # yield "Converting .csv to .line file..."
-        line_protocol.convert_to_lineprotocol(
-            str(csv_path.resolve()),
-            str(line_path.resolve()),
-        )
-        app.config["tasks"][current_thread_name] = 80
-        # Convert .csv to .line and save to temp dir
-        # yield "Done! Converted .csv file to .line file"
+        try:
+            line_protocol.convert_to_lineprotocol(
+                str(csv_path.resolve()),
+                str(line_path.resolve()),
+            )
+        except Exception as exec:
+            conversion_progress.exception = exec
+            return
+        else:
+            conversion_progress.progress = 80
 
-        # yield "Writing .line file to influxDB..."
-
-        write_to_influxDB.write_to_influxDB(str(line_path.resolve()))
-        app.config["tasks"][current_thread_name] = 100
-        # yield "Could not find credential files!"
-        # yield "Done! Wrote .line file to influxDB"
+        try:
+            write_to_influxDB.write_to_influxDB(str(line_path.resolve()))
+        except Exception as exec:
+            conversion_progress.exception = exec
+            return
+        else:
+            conversion_progress.progress = 100
 
 
 if __name__ == "__main__":
