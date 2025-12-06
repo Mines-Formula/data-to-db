@@ -111,40 +111,38 @@ def convert_file(file: FileStorage) -> Generator[str]:
         line_path = CSV_PARENT_PATH / line_filename
 
         # yield "Saving raw .data file to temp dir..."
-        app.config["tasks"][current_thread_name] = 20
         file.save(raw_data_path)  # Save .data file to temp dir
+        app.config["tasks"][current_thread_name] = 20
         # yield "Done! Saved .data file to temp dir"
 
         # CONVERT TO UNKNOWN SAVE TO `unknown_data_path`
         # yield "Deserializing raw .data file to unknown .data file..."
-        app.config["tasks"][current_thread_name] = 40
         deserializer.deserialize(
             str(raw_data_path.resolve()), str(unknown_data_path.resolve())
         )
+        app.config["tasks"][current_thread_name] = 40
 
         # yield "Decoding unknown .data file to .csv and saving..."
-        app.config["tasks"][current_thread_name] = 60
         decode.make_known(
             str(unknown_data_path.resolve()), str(csv_path.resolve())
         )  # Convert .data file to .csv and save to CSV_PARENT_PATH
+        app.config["tasks"][current_thread_name] = 60
         # yield "Done! Decoded .data file"
 
         # yield "Converting .csv to .line file..."
-        app.config["tasks"][current_thread_name] = 80
         line_protocol.convert_to_lineprotocol(
             str(csv_path.resolve()),
             str(line_path.resolve()),
-        )  # Convert .csv to .line and save to temp dir
+        )
+        app.config["tasks"][current_thread_name] = 80
+        # Convert .csv to .line and save to temp dir
         # yield "Done! Converted .csv file to .line file"
 
         # yield "Writing .line file to influxDB..."
 
+        write_to_influxDB.write_to_influxDB(str(line_path.resolve()))
         app.config["tasks"][current_thread_name] = 100
-        try:
-            write_to_influxDB.write_to_influxDB(str(line_path.resolve()))
-        except FileNotFoundError:
-            pass
-            # yield "Could not find credential files!"
+        # yield "Could not find credential files!"
         # yield "Done! Wrote .line file to influxDB"
 
 
