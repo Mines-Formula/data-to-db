@@ -49,11 +49,11 @@ def make_known(unknown_file_name: Path, output_file_name: Path):
     # === DECODES dataBytes TO BE WRITTEN INTO CSV ===
     writable_lines = []
     for dataset in data:
+        write_this = []
+        values = []
+        units = []
+        sensors = []
         try:
-            write_this = []
-            values = []
-            units = []
-            sensors = []
             decoded = db.decode_message(dataset[1], dataset[2])
             message = db.get_message_by_frame_id(dataset[1])
             write_this.append(dataset[0])  # timestamp
@@ -69,16 +69,30 @@ def make_known(unknown_file_name: Path, output_file_name: Path):
                         ""  # For sensors with undefined units in dbc, adds empty string
                     )
                 units.append(unit)
-            write_this.append(sensors)
-            write_this.append(values)
-            write_this.append(units)
-            writable_lines.append(write_this)
+            write_this.append(sensors) # write_this[2]
+            write_this.append(values) # write_this[3]
+            write_this.append(units) # write_this[4]
+            writable_lines.append(write_this) 
 
         except Exception as e:
             if dataset[1] not in skipped_ids:
                 skipped_ids.append(dataset[1])
             failed_lines += 1
             continue
+    
+    # === CHECK FOR TIME SENSOR ===
+    if 'Time' not in sensors:
+        raise ValueError('Time sensor with no value')
+    # if sensors['Time']
+    
+    # === CHECK FOR TIME VALUES ===
+    no_time = True
+    for line in writable_lines:
+        for i in range(len(line[2])):
+            if line[2][i] == 'Time' and line[3][i] != None:
+                no_time = False
+    if no_time:
+        raise ValueError('Time sensor with no value')
 
     # === WRITES DECODED DATA TO OUTPUT FILE ===
     with open(output_file, "w") as file:
