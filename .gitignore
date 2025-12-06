@@ -134,3 +134,6 @@ __marimo__/
 
 *.csv
 *.rr
+*.line
+
+data/influxdb2_parameters

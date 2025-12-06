@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir poetry
 
 # Set the working directory
-WORKDIR /app
+WORKDIR .
 
 # Copy only dependency files first (for better caching)
 COPY pyproject.toml poetry.lock ./
@@ -29,12 +29,9 @@ RUN poetry install --no-root --no-interaction --no-ansi
 # Copy the rest of the project
 COPY . .
 
-# Create data directory (in case app writes files)
-RUN mkdir -p app/data
-
 # Expose Flask/Gunicorn port
-EXPOSE 6969
+EXPOSE 6767
 
 # Default command to run the app with Gunicorn
-CMD ["flask", "--app", "src.app.app:app", "run", "-p", "6969", "-h", "0.0.0.0"]
-#CMD ["gunicorn", "-w", "1", "--log-level", "debug", "-b", "0.0.0.0:6969", "src.app.app:app"]
+CMD
+CMD ["flask", "--app", "src.app.app:app", "run", "-p", "6767", "-h", "0.0.0.0"]
