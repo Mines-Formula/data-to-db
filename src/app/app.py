@@ -3,7 +3,14 @@ from __future__ import annotations
 import tempfile
 from typing import TYPE_CHECKING, Generator
 
-from flask import Flask, jsonify, render_template, request, Response
+from flask import (
+    Flask,
+    jsonify,
+    render_template,
+    request,
+    Response,
+    stream_with_context,
+)
 from pathlib import Path
 from src.known_to_influxdb import line_protocol, write_to_influxDB
 from src.unknown_to_known import decode
@@ -52,9 +59,13 @@ def upload_data():
             file_like = FileStorage(
                 stream=BytesIO(content), name=filename, filename=filename
             )
-            yield from convert_file(file_like)
 
-    return Response(generate(), mimetype="text/event-stream")
+            try:
+                yield from convert_file(file_like)
+            except Exception as e:
+                yield "Error!: " + str(e)
+
+    return stream_with_context(generate())
 
 
 def convert_file(file: FileStorage) -> Generator[str]:
@@ -85,9 +96,14 @@ def convert_file(file: FileStorage) -> Generator[str]:
 
         # CONVERT TO UNKNOWN SAVE TO `unknown_data_path`
         yield "Deserializing raw .data file to unknown .data file..."
-        deserializer.deserialize(
-            str(raw_data_path.resolve()), str(unknown_data_path.resolve())
-        )
+
+        try:
+            raise Exception
+            deserializer.deserialize(
+                str(raw_data_path.resolve()), str(unknown_data_path.resolve())
+            )
+        except Exception as exec:
+            raise ValueError
 
         yield "Decoding unknown .data file to .csv and saving..."
         decode.make_known(
