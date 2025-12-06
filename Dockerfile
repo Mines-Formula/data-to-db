@@ -30,8 +30,7 @@ RUN poetry install --no-root --no-interaction --no-ansi
 COPY . .
 
 # Expose Flask/Gunicorn port
-EXPOSE 6969
+EXPOSE 6767
 
 # Default command to run the app with Gunicorn
-CMD ["flask", "--app", "src.app.app:app", "run", "-p", "6969", "-h", "0.0.0.0"]
-#CMD ["gunicorn", "-w", "1", "--log-level", "debug", "-b", "0.0.0.0:6969", "src.app.app:app"]
+CMD ["flask", "--app", "src.app.app:app", "run", "-p", "6767", "-h", "0.0.0.0"]
