@@ -2,6 +2,10 @@ import cantools
 import pandas as pd
 import os
 
+from pathlib import Path
+
+from constants import *
+
 """
 @author Magnus Van Zyl
 Script to convert raw canbus data into readable data in a csv file in the format 'Timestamp,CANID,SENSOR,Value,Unit'.
@@ -16,7 +20,7 @@ def make_known(unknown_file_name: str, output_file_name: str):
     :param output_file_name: Name of the csv file decoded data will be written to
     """
     # === LOAD DBC ===
-    db = cantools.database.load_file("data/DBCFiles/MF13Beta.dbc")
+    db = cantools.database.load_file(DATA_DIR / Path("DBCFiles/MF13Beta.dbc"))
 
     # === DEFINE HEADERS AND FILE PATHS ===
     fields = ["Timestamp", "CANID", "Sensor", "Value", "Unit"]

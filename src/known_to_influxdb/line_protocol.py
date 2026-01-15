@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from src.known_to_influxdb import convert_unix_time
+from known_to_influxdb import convert_unix_time
 
 """
 @author Will Turchin
