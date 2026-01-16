@@ -1,6 +1,7 @@
 import subprocess
 import os
 
+
 def write_to_influxDB(FILE_INPUT: str):
     """
     Reads a .line and writes to the influxDB database through the commandline
@@ -14,17 +15,16 @@ def write_to_influxDB(FILE_INPUT: str):
     ORG: str
     TOKEN: str
 
-    with open("data/influxdb2_parameters/influxdb2-localhost-url") as file:
+    with open("/data/influxdb2_parameters/influxdb2-localhost-url") as file:
         HOST_NAME = file.read()
-    with open("data/influxdb2_parameters/influxdb2-org") as file:
+    with open("/data/influxdb2_parameters/influxdb2-org") as file:
         ORG = file.read()
         ORG = ORG.strip()
-    with open("data/influxdb2_parameters/influxdb2-admin-token") as file:
+    with open("/data/influxdb2_parameters/influxdb2-admin-token") as file:
         TOKEN = file.read()
-        TOKEN = TOKEN.strip()
+        TOKEN = TOKEN.strip()  # Should be using a constant of some kind for these
 
-
-    HOST_NAME = "http://fsaelinux.mines.edu:8086" # hard code for now
+    HOST_NAME = "http://fsaelinux.mines.edu:8086"  # hard code for now :thumbsdown:
 
     """
     follows the command structure:
@@ -34,8 +34,10 @@ def write_to_influxDB(FILE_INPUT: str):
     command = [
         "influx",
         "write",
-        "--precision", "ms",
-        "--format", "lp",
+        "--precision",
+        "ms",
+        "--format",
+        "lp",
         "--host",
         HOST_NAME,
         "--bucket",

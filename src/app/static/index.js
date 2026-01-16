@@ -6,8 +6,6 @@ let pollIntervalId = null;
 
 dropZone.addEventListener('click', () => fileInput.click());
 
-// For .data files, MIME type is often generic, so we won’t over-validate.
-// Just show the visual dragover state.
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
   dropZone.classList.remove('invalid');
@@ -40,7 +38,7 @@ fileInput.addEventListener('change', (e) => {
 function handleFiles(files) {
   const formData = new FormData();
   for (const file of files) {
-    // Backend just loops over request.files.values() so key name doesn’t matter
+    // Backend just loops over request.files.values() so key name doesn't matter
     formData.append(file.name, file);
   }
 
@@ -81,12 +79,10 @@ function handleFiles(files) {
 }
 
 function startPolling(taskName) {
-  // Just in case
   if (pollIntervalId !== null) {
     clearInterval(pollIntervalId);
   }
 
-  // Immediately show “0%” and then start interval
   updateProgressDisplay(0);
 
   pollIntervalId = setInterval(async () => {
@@ -102,6 +98,13 @@ function startPolling(taskName) {
       }
 
       const data = await response.json();
+
+      if (data.exception.present) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+        return showAlert(`Error: ${data.exception.type}`, 'danger');
+      }
+
       const progress = typeof data.progress === 'number' ? data.progress : 0;
 
       updateProgressDisplay(progress);
@@ -110,6 +113,7 @@ function startPolling(taskName) {
         clearInterval(pollIntervalId);
         pollIntervalId = null;
         showAlert('Upload and processing complete!', 'success');
+        loadFiles();
       }
     } catch (err) {
       console.error(err);
@@ -117,7 +121,7 @@ function startPolling(taskName) {
       pollIntervalId = null;
       showAlert('Error while checking progress.', 'danger');
     }
-  }, 500);  // poll every second
+  }, 500);
 }
 
 function updateProgressDisplay(percent) {
@@ -127,6 +131,49 @@ function updateProgressDisplay(percent) {
 
 function showAlert(message, type) {
   alertContainer.innerHTML = `
-    <div class="alert alert-${type} mt-3" role="alert">${message}</div>
+    <div class='alert alert-${type} mt-3' role='alert'>${message}</div>
   `;
 }
+
+async function loadFiles() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = '';
+
+  try {
+    const res = await fetch('/files');
+    const files = await res.json();
+
+    if (files.length === 0) {
+      list.innerHTML =
+          `<li class="list-group-item text-muted">No files found</li>`;
+      return;
+    }
+
+    for (const file of files) {
+      const li = document.createElement('li');
+      li.className =
+          'list-group-item d-flex justify-content-between align-items-center';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = file;
+      nameSpan.className = 'me-2 text-truncate';
+      nameSpan.style.maxWidth = '240px';
+
+      const downloadA = document.createElement('a');
+      downloadA.className = 'btn btn-sm btn-outline-primary';
+      downloadA.textContent = 'Download';
+      downloadA.href = `/files/download/${encodeURIComponent(file)}`;
+      downloadA.setAttribute('download', '');
+
+      li.appendChild(nameSpan);
+      li.appendChild(downloadA);
+      list.appendChild(li);
+    }
+
+  } catch (err) {
+    list.innerHTML =
+        `<li class="list-group-item text-danger">Failed to load files</li>`;
+  }
+}
+
+loadFiles();

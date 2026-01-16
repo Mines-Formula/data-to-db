@@ -2,6 +2,10 @@ import cantools
 import pandas as pd
 import os
 
+from pathlib import Path
+
+from constants import *
+
 """
 @author Magnus Van Zyl
 Script to convert raw canbus data into readable data in a csv file in the format 'Timestamp,CANID,SENSOR,Value,Unit'.
@@ -16,7 +20,7 @@ def make_known(unknown_file_name: str, output_file_name: str):
     :param output_file_name: Name of the csv file decoded data will be written to
     """
     # === LOAD DBC ===
-    db = cantools.database.load_file("data/MF13Beta.dbc")
+    db = cantools.database.load_file(DATA_DIR / Path("DBCFiles/MF13Beta.dbc"))
 
     # === DEFINE HEADERS AND FILE PATHS ===
     fields = ["Timestamp", "CANID", "Sensor", "Value", "Unit"]
@@ -53,11 +57,11 @@ def make_known(unknown_file_name: str, output_file_name: str):
     # === DECODES dataBytes TO BE WRITTEN INTO CSV ===
     writable_lines = []
     for dataset in data:
+        write_this = []
+        values = []
+        units = []
+        sensors = []
         try:
-            write_this = []
-            values = []
-            units = []
-            sensors = []
             decoded = db.decode_message(dataset[1], dataset[2])
             message = db.get_message_by_frame_id(dataset[1])
             write_this.append(dataset[0])  # timestamp
@@ -73,9 +77,9 @@ def make_known(unknown_file_name: str, output_file_name: str):
                         ""  # For sensors with undefined units in dbc, adds empty string
                     )
                 units.append(unit)
-            write_this.append(sensors)
-            write_this.append(values)
-            write_this.append(units)
+            write_this.append(sensors)  # write_this[2]
+            write_this.append(values)  # write_this[3]
+            write_this.append(units)  # write_this[4]
             writable_lines.append(write_this)
 
         except Exception as e:
@@ -84,6 +88,15 @@ def make_known(unknown_file_name: str, output_file_name: str):
                 skipped_ids.append(dataset[1])
             failed_lines += 1
             continue
+
+    # === CHECK FOR TIME VALUES ===
+    no_time = True
+    for line in writable_lines:
+        for i in range(len(line[2])):
+            if line[2][i] == "Time" and line[3][i] != None:
+                no_time = False
+    if no_time:
+        raise ValueError("Time sensor with no value")
 
     # === WRITES FAILED LINES TO LOG FILE ===
     for i in range(len(failed_lines_raw)):
