@@ -181,8 +181,14 @@ def convert_file(file: FileStorage) -> None:
 
 @app.route("/files")
 def list_files():
-    try:  # May also wants data/csv to be included?
-        files = [path.name for path in RERUN_DIR.iterdir() if path.is_file()]
+    type_ = request.args.get("type", "").casefold()
+
+    if type_ not in ("csv", "rerun"):
+        return "Invalid type!", 400
+
+    try:
+        dir = RERUN_DIR if type_ == "csv" else CSV_DIR
+        files = [path.name for path in dir.iterdir() if path.is_file()]
         return jsonify(files)
     except FileNotFoundError:
         return jsonify([]), 200
@@ -190,7 +196,12 @@ def list_files():
 
 @app.route("/files/download/<path:filename>")
 def download_file(filename):
-    return send_from_directory(RERUN_DIR, filename, as_attachment=True)
+    if (RERUN_DIR / Path(filename)).exists():
+        dir = RERUN_DIR
+    else:
+        dir = CSV_DIR
+
+    return send_from_directory(dir, filename, as_attachment=True)
 
 
 if __name__ == "__main__":

@@ -113,7 +113,7 @@ function startPolling(taskName) {
         clearInterval(pollIntervalId);
         pollIntervalId = null;
         showAlert('Upload and processing complete!', 'success');
-        loadFiles();
+        loadAllFiles();
       }
     } catch (err) {
       console.error(err);
@@ -135,12 +135,12 @@ function showAlert(message, type) {
   `;
 }
 
-async function loadFiles() {
-  const list = document.getElementById('fileList');
+async function loadFiles(type) {
+  const list = document.getElementById(`${type}fileList`);
   list.innerHTML = '';
 
   try {
-    const res = await fetch('/files');
+    const res = await fetch(`/files?type=${type}`);
     const files = await res.json();
 
     if (files.length === 0) {
@@ -176,4 +176,9 @@ async function loadFiles() {
   }
 }
 
-loadFiles();
+async function loadAllFiles() {
+  loadFiles('csv');
+  loadFiles('rerun');
+}
+
+loadAllFiles();
