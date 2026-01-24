@@ -69,7 +69,7 @@ def upload_data():
     if len(request.files) == 0:
         return jsonify({"error": "No file uploaded"}), 400
 
-    if not all(
+    if not any(
         file.filename and allowed_file(file.filename) for file in request.files.values()
     ):
         return jsonify({"error": "Invalid types uploaded."}), 400
