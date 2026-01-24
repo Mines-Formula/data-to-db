@@ -59,7 +59,7 @@ function handleFiles(files) {
   })
       .then((response) => {
         if (!response.ok) {
-          throw new Error('Upload failed or server error.');
+          throw new Error(`??? Yo ${response.statusText.toLowerCase()}`);
         }
         return response.json();
       })
@@ -69,7 +69,6 @@ function handleFiles(files) {
           throw new Error('Server did not return a task name.');
         }
 
-        // Start polling /progress with this task name
         startPolling(taskName);
       })
       .catch((error) => {
